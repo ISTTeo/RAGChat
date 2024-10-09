@@ -23,6 +23,7 @@
   const isLoading = ref(false)
   const chatMessages = ref(null)
   const error = ref('')
+  const selectedContexts = ref([])
   
   const props = defineProps<{
     uploadedFile: File | null
@@ -38,14 +39,17 @@
     error.value = ''
   
     try {
-      // First, get relevant contexts
-      const contextsResponse = await axios.post('http://localhost:5001/api/query', {
-        question: userMessage.text
-      })
+      let contexts = selectedContexts.value
+      
+      // If no contexts are selected, fetch them
+      if (contexts.length === 0) {
+        const contextsResponse = await axios.post('http://localhost:5001/api/query', {
+          question: userMessage.text
+        })
+        contexts = contextsResponse.data.contexts
+      }
   
-      const contexts = contextsResponse.data.contexts
-  
-      // Then, get the answer using the contexts
+      // Get the answer using the contexts
       const answerResponse = await axios.post('http://localhost:5001/api/answer', {
         question: userMessage.text,
         contexts: contexts
@@ -69,13 +73,22 @@
   
   watch(() => messages.value.length, scrollToBottom)
   onMounted(scrollToBottom)
+  
+  // Method to receive updated contexts
+  const updateSelectedContexts = (contexts) => {
+    selectedContexts.value = contexts
+  }
+  
+  // Expose the method to the parent component
+  defineExpose({ updateSelectedContexts })
   </script>
   
+
   <style scoped>
   .chat-interface {
     display: flex;
     flex-direction: column;
-    height: 90%; /* Adjust based on your header height */
+    height: calc(100% - 40px); /* Adjust based on your header height */
   }
   
   .chat-messages {
@@ -135,10 +148,5 @@
   
   .error {
     color: red;
-  }
-  
-  .system {
-    background-color: #f0f0f0;
-    font-style: italic;
   }
   </style>
