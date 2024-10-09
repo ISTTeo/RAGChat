@@ -1,4 +1,3 @@
-# app.py
 from flask import Flask, request, jsonify
 from werkzeug.utils import secure_filename
 import os
@@ -11,16 +10,17 @@ from langchain.chains import create_retrieval_chain
 from langchain_core.prompts import PromptTemplate
 from langchain_core.language_models.llms import LLM
 from pydantic import Field
-from flask_cors import CORS  # Add this import
+from flask_cors import CORS
 import requests
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
-
+CORS(app)
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'pdf'}
-
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# Global variable to store the vectorstore
+global_vectorstore = None
 
 class LocalLLM(LLM):
     api_url: str = Field(..., description="URL of the local model API")
@@ -49,7 +49,69 @@ def create_vectorstore(splits):
     embeddings_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
     return Chroma.from_documents(splits, embedding=embeddings_model)
 
-def create_multi_context_rag_chain(llm, retriever, num_contexts):
+@app.route('/api/upload', methods=['POST'])
+def upload_file():
+    global global_vectorstore
+    print("Uploading file")
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(file_path)
+        
+        splits = load_and_process_document(file_path)
+        global_vectorstore = create_vectorstore(splits)
+        
+        os.remove(file_path)  # Clean up the uploaded file
+        print("File Uploaded!")
+        print(f"Vectorstore: {global_vectorstore}")
+
+        return jsonify({"message": "File processed successfully"}), 200
+    return jsonify({"error": "Invalid file type"}), 400
+
+@app.route('/api/query', methods=['POST'])
+def query_document():
+    global global_vectorstore
+    print("Querying")
+    data = request.json
+    print(data)
+
+    if not data or 'question' not in data:
+        return jsonify({"error": "No question provided"}), 400
+    
+    question = data['question']
+    print(f"Vectorstore: {global_vectorstore}")
+
+    if global_vectorstore is None:
+        print("No vectorstore found")
+        return jsonify({"error": "No document has been uploaded yet"}), 400
+    
+    retriever = global_vectorstore.as_retriever()
+    
+    # Retrieve relevant contexts
+    contexts = retriever.get_relevant_documents(question)
+    
+    # Format contexts for response
+    formatted_contexts = [{"page": ctx.metadata.get('page', 'Unknown'), "content": ctx.page_content} for ctx in contexts]
+    
+    print(formatted_contexts)
+    return jsonify({"contexts": formatted_contexts}), 200
+
+@app.route('/api/answer', methods=['POST'])
+def answer_question():
+    data = request.json
+    if not data or 'question' not in data or 'contexts' not in data:
+        return jsonify({"error": "Missing question or contexts"}), 400
+    
+    question = data['question']
+    contexts = data['contexts']
+    
+    llm = LocalLLM(api_url="http://localhost:5000")
+    
     template = """<|system|>
 You are an assistant for question-answering tasks. Use the following pieces of retrieved context to answer the question. If you don't know the answer, just say that you don't know. Use three sentences maximum and keep the answer concise.<|end|>
 <|user|>
@@ -58,42 +120,14 @@ Contexts:
 {context}<|end|>
 <|assistant|>"""
     prompt = PromptTemplate.from_template(template)
-
-    question_answer_chain = create_stuff_documents_chain(llm, prompt)
-    return create_retrieval_chain(retriever, question_answer_chain)
-
-@app.route('/api/process', methods=['POST'])
-def process_document():
-    print(request.values)
-    if 'file' not in request.files:
-        return jsonify({"error": "No file part"}), 400
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({"error": "No selected file"}), 400
-    if file and allowed_file(file.filename):
-        print(file)
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(file_path)
-        
-        splits = load_and_process_document(file_path)
-        #print(splits)
-        vectorstore = create_vectorstore(splits)
-        retriever = vectorstore.as_retriever()
-        
-        llm = LocalLLM(api_url="http://localhost:5000")
-        rag_chain = create_multi_context_rag_chain(llm, retriever, num_contexts=4)
-        
-        question = request.form.get('question')
-        if not question:
-            return jsonify({"error": "No question provided"}), 400
-        
-        response = rag_chain.invoke({"input": question})
-        print(response)
-        os.remove(file_path)  # Clean up the uploaded file
-        
-        return jsonify({"answer": response['answer']})
-    return jsonify({"error": "Invalid file type"}), 400
+    
+    # Combine contexts into a single string
+    combined_context = "\n".join([ctx['content'] for ctx in contexts])
+    
+    # Generate answer
+    response = llm(prompt.format(input=question, context=combined_context))
+    
+    return jsonify({"answer": response}), 200
 
 if __name__ == '__main__':
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)

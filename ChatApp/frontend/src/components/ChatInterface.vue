@@ -23,21 +23,13 @@
   const isLoading = ref(false)
   const chatMessages = ref(null)
   const error = ref('')
-  const uploadedFile = ref<File | null>(null)
   
   const props = defineProps<{
     uploadedFile: File | null
   }>()
   
-  watch(() => props.uploadedFile, (newFile) => {
-    if (newFile) {
-      uploadedFile.value = newFile
-      messages.value.push({ type: 'system', text: `File uploaded: ${newFile.name}. You can now ask questions about the content.` })
-    }
-  })
-  
   const sendMessage = async () => {
-    if (inputMessage.value.trim() === '' || !uploadedFile.value) return
+    if (inputMessage.value.trim() === '' || !props.uploadedFile) return
     
     const userMessage = { type: 'user', text: inputMessage.value }
     messages.value.push(userMessage)
@@ -45,17 +37,21 @@
     isLoading.value = true
     error.value = ''
   
-    const formData = new FormData()
-    formData.append('question', userMessage.text)
-    formData.append('file', uploadedFile.value)
-  
     try {
-      const result = await axios.post('http://localhost:5001/api/process', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+      // First, get relevant contexts
+      const contextsResponse = await axios.post('http://localhost:5001/api/query', {
+        question: userMessage.text
       })
-      messages.value.push({ type: 'bot', text: result.data.answer })
+  
+      const contexts = contextsResponse.data.contexts
+  
+      // Then, get the answer using the contexts
+      const answerResponse = await axios.post('http://localhost:5001/api/answer', {
+        question: userMessage.text,
+        contexts: contexts
+      })
+  
+      messages.value.push({ type: 'bot', text: answerResponse.data.answer })
     } catch (err) {
       console.error('Error:', err)
       error.value = 'An error occurred while processing your request. Please try again.'

@@ -30,6 +30,7 @@
   
   <script setup lang="ts">
   import { ref } from 'vue'
+  import axios from 'axios'
   
   const selectedFile = ref<File | null>(null)
   const isUploading = ref(false)
@@ -78,12 +79,23 @@
     uploadError.value = ''
   
     try {
-      // Simulated API call
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      
-      uploadSuccess.value = true
-      emit('fileUploaded', selectedFile.value)
+      const formData = new FormData()
+      formData.append('file', selectedFile.value)
+  
+      const response = await axios.post('http://localhost:5001/api/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      })
+  
+      if (response.status === 200) {
+        uploadSuccess.value = true
+        emit('fileUploaded', selectedFile.value)
+      } else {
+        throw new Error('Upload failed')
+      }
     } catch (error) {
+      console.error('Upload error:', error)
       uploadError.value = 'An error occurred during upload. Please try again.'
     } finally {
       isUploading.value = false
