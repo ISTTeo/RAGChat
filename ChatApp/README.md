@@ -1,2 +1,2 @@
 
-![App](challed/app.png)
+![App](app.png)
