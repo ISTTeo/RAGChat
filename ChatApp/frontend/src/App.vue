@@ -1,11 +1,8 @@
 <template>
   <div id="app">
-    <header>
-      <img alt="Vue logo" class="logo" src="@/assets/logo.svg" width="125" height="125" />
-      <h1>RAG Question Answering</h1>
-    </header>
-    <div class="content-wrapper">
+    <div class="split-layout">
       <div class="chat-section">
+        <h1>RAG Question Answering</h1>
         <ChatInterface :uploadedFile="uploadedFile" />
       </div>
       <div class="file-upload-section">
@@ -26,46 +23,48 @@ const handleFileUpload = (file: File) => {
   uploadedFile.value = file
 }
 </script>
+
 <style scoped>
 #app {
   font-family: Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  text-align: center;
   color: #2c3e50;
-  margin-top: 60px;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
 }
 
-header {
-  margin-bottom: 2rem;
-}
-
-.content-wrapper {
+.split-layout {
   display: flex;
-  justify-content: space-between;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 20px;
+  height: 100%;
+}
+
+.chat-section, .file-upload-section {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
 }
 
 .chat-section {
-  flex: 1;
-  margin-right: 20px;
+  border-right: 1px solid #ccc;
 }
 
-.file-upload-section {
-  width: 300px;
+h1 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  font-size: 24px;
+  text-align: center;
 }
 
 @media (max-width: 768px) {
-  .content-wrapper {
+  .split-layout {
     flex-direction: column;
   }
-
-  .chat-section, .file-upload-section {
-    width: 100%;
-    margin-right: 0;
-    margin-bottom: 20px;
+  
+  .chat-section {
+    border-right: none;
+    border-bottom: 1px solid #ccc;
   }
 }
 </style>
