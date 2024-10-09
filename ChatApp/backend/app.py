@@ -77,7 +77,7 @@ def process_document():
         file.save(file_path)
         
         splits = load_and_process_document(file_path)
-        print(splits)
+        #print(splits)
         vectorstore = create_vectorstore(splits)
         retriever = vectorstore.as_retriever()
         
@@ -89,7 +89,7 @@ def process_document():
             return jsonify({"error": "No question provided"}), 400
         
         response = rag_chain.invoke({"input": question})
-        
+        print(response)
         os.remove(file_path)  # Clean up the uploaded file
         
         return jsonify({"answer": response['answer']})

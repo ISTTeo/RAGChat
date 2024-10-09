@@ -79,7 +79,7 @@
   .chat-interface {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 100px); /* Adjust based on your header height */
+    height: 90%; /* Adjust based on your header height */
   }
   
   .chat-messages {
