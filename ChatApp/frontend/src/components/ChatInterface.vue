@@ -7,7 +7,9 @@
       </div>
       <div class="chat-input">
         <input v-model="inputMessage" @keyup.enter="sendMessage" placeholder="Type your question..." />
-        <button @click="sendMessage" :disabled="isLoading || !uploadedFile">Send</button>
+        <button @click="sendMessage" :disabled="isLoading || !uploadedFile">
+          {{ sendButtonText }}
+        </button>
       </div>
       <div v-if="isLoading" class="loading">Processing...</div>
       <div v-if="error" class="error">{{ error }}</div>
@@ -15,7 +17,7 @@
   </template>
   
   <script setup lang="ts">
-  import { ref, onMounted, watch } from 'vue'
+  import { ref, computed } from 'vue'
   import axios from 'axios'
   
   const inputMessage = ref('')
@@ -29,6 +31,10 @@
     uploadedFile: File | null
   }>()
   
+  const sendButtonText = computed(() => {
+    return selectedContexts.value.length > 0 ? 'Ask with context' : 'Ask without context'
+  })
+  
   const sendMessage = async () => {
     if (inputMessage.value.trim() === '' || !props.uploadedFile) return
     
@@ -40,14 +46,6 @@
   
     try {
       let contexts = selectedContexts.value
-      
-      // If no contexts are selected, fetch them
-      if (contexts.length === 0) {
-        const contextsResponse = await axios.post('http://localhost:5001/api/query', {
-          question: userMessage.text
-        })
-        contexts = contextsResponse.data.contexts
-      }
   
       // Get the answer using the contexts
       const answerResponse = await axios.post('http://localhost:5001/api/answer', {
@@ -71,15 +69,10 @@
     }
   }
   
-  watch(() => messages.value.length, scrollToBottom)
-  onMounted(scrollToBottom)
-  
-  // Method to receive updated contexts
   const updateSelectedContexts = (contexts) => {
     selectedContexts.value = contexts
   }
   
-  // Expose the method to the parent component
   defineExpose({ updateSelectedContexts })
   </script>
   
