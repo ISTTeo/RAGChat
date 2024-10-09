@@ -3,10 +3,19 @@
     <div class="split-layout">
       <div class="chat-section">
         <h1>RAG Question Answering</h1>
-        <ChatInterface ref="chatInterface" :uploadedFile="uploadedFile" />
+        <ChatInterface 
+          ref="chatInterface" 
+          :uploadedFile="uploadedFile" 
+          :selectedContexts="selectedContexts"
+          @removeContext="removeContext"
+        />
       </div>
       <div class="file-upload-section">
-        <FileUpload @fileUploaded="handleFileUpload" @contextsUpdated="handleContextsUpdated" />
+        <FileUpload 
+          @fileUploaded="handleFileUpload" 
+          @contextsUpdated="handleContextsUpdated" 
+          :selectedContexts="selectedContexts"
+        />
       </div>
     </div>
   </div>
@@ -19,15 +28,22 @@ import FileUpload from './components/FileUpload.vue'
 
 const uploadedFile = ref<File | null>(null)
 const chatInterface = ref(null)
+const selectedContexts = ref([])
 
 const handleFileUpload = (file: File) => {
   uploadedFile.value = file
 }
 
 const handleContextsUpdated = (contexts) => {
-  if (chatInterface.value) {
-    chatInterface.value.updateSelectedContexts(contexts)
-  }
+  contexts.forEach(context => {
+    if (!selectedContexts.value.some(c => c.content === context.content)) {
+      selectedContexts.value.push(context)
+    }
+  })
+}
+
+const removeContext = (index: number) => {
+  selectedContexts.value.splice(index, 1)
 }
 </script>
 

@@ -1,103 +1,107 @@
 <template>
-    <div class="file-upload">
-      <h2>Upload PDF and Ask Context Question</h2>
-      <div 
-        class="upload-container"
-        :class="{ 'dragging': isDragging }"
-        @dragover.prevent="handleDragOver"
-        @dragleave.prevent="handleDragLeave"
-        @drop.prevent="handleDrop"
-      >
-        <input 
-          type="file" 
-          @change="handleFileSelect" 
-          accept=".pdf" 
-          id="file-input" 
-          class="file-input"
-        />
-        <label for="file-input" class="file-input-label">
-          <span v-if="!selectedFile">Drag & Drop PDF here or Click to Browse</span>
-          <span v-else>{{ selectedFile.name }}</span>
-        </label>
-      </div>
-      <div v-if="isUploading" class="upload-status">Uploading...</div>
-      <div v-if="uploadSuccess" class="upload-status success">Upload successful!</div>
-      <div v-if="uploadError" class="upload-status error">{{ uploadError }}</div>
-  
-      <div v-if="uploadSuccess" class="context-question-section">
-        <h3>Ask a Context Question</h3>
-        <input 
-          v-model="contextQuestion" 
-          @keyup.enter="getContext" 
-          placeholder="Enter your question..." 
-          class="context-input"
-        />
-        <button @click="getContext" :disabled="isLoadingContext">Get Context</button>
-        <div v-if="isLoadingContext" class="loading-context">Loading context...</div>
-        <div v-if="contextError" class="error">{{ contextError }}</div>
-        <div v-if="contexts.length > 0" class="context-results">
-          <h4>Relevant Contexts:</h4>
-          <div v-for="(context, index) in contexts" :key="index" class="context-item">
-            <label>
-              <input type="checkbox" v-model="context.selected" @change="updateSelectedContexts" />
-              <strong>Page {{ context.page }}:</strong>
-            </label>
-            <p>{{ context.content }}</p>
-          </div>
+  <div class="file-upload">
+    <h2>Upload PDF and Ask Context Question</h2>
+    <div 
+      class="upload-container"
+      :class="{ 'dragging': isDragging }"
+      @dragover.prevent="handleDragOver"
+      @dragleave.prevent="handleDragLeave"
+      @drop.prevent="handleDrop"
+    >
+      <input 
+        type="file" 
+        @change="handleFileSelect" 
+        accept=".pdf" 
+        id="file-input" 
+        class="file-input"
+      />
+      <label for="file-input" class="file-input-label">
+        <span v-if="!selectedFile">Drag & Drop PDF here or Click to Browse</span>
+        <span v-else>{{ selectedFile.name }}</span>
+      </label>
+    </div>
+    <div v-if="isUploading" class="upload-status">Uploading...</div>
+    <div v-if="uploadSuccess" class="upload-status success">Upload successful!</div>
+    <div v-if="uploadError" class="upload-status error">{{ uploadError }}</div>
+
+    <div v-if="uploadSuccess" class="context-question-section">
+      <h3>Ask a Context Question</h3>
+      <input 
+        v-model="contextQuestion" 
+        @keyup.enter="getContext" 
+        placeholder="Enter your question..." 
+        class="context-input"
+      />
+      <button @click="getContext" :disabled="isLoadingContext">Get Context</button>
+      <div v-if="isLoadingContext" class="loading-context">Loading context...</div>
+      <div v-if="contextError" class="error">{{ contextError }}</div>
+      <div v-if="contexts.length > 0" class="context-results">
+        <h4>Relevant Contexts:</h4>
+        <div v-for="(context, index) in contexts" :key="index" class="context-item">
+          <label>
+            <input type="checkbox" v-model="context.selected" @change="updateSelectedContexts" />
+            <strong>Page {{ context.page }}:</strong>
+          </label>
+          <p>{{ context.content }}</p>
         </div>
       </div>
     </div>
-  </template>
-  <script setup lang="ts">
-  import { ref, watch } from 'vue'
-  import axios from 'axios'
-  
-  const selectedFile = ref<File | null>(null)
-  const isUploading = ref(false)
-  const uploadSuccess = ref(false)
-  const uploadError = ref('')
-  const isDragging = ref(false)
-  const contextQuestion = ref('')
-  const isLoadingContext = ref(false)
-  const contextError = ref('')
-  const contexts = ref<Array<{ page: string, content: string, selected: boolean }>>([])
-  
-  const emit = defineEmits(['fileUploaded', 'contextsUpdated'])
-  //const hasSelectedContexts = computed(() => contexts.value.some(context => context.selected))
-  
-  const handleDragOver = (event: DragEvent) => {
-    isDragging.value = true
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, watch } from 'vue'
+import axios from 'axios'
+
+const props = defineProps<{
+  selectedContexts: Array<{ page: string, content: string }>
+}>()
+
+const emit = defineEmits(['fileUploaded', 'contextsUpdated'])
+
+const selectedFile = ref<File | null>(null)
+const isUploading = ref(false)
+const uploadSuccess = ref(false)
+const uploadError = ref('')
+const isDragging = ref(false)
+const contextQuestion = ref('')
+const isLoadingContext = ref(false)
+const contextError = ref('')
+const contexts = ref<Array<{ page: string, content: string, selected: boolean }>>([])
+
+const handleDragOver = (event: DragEvent) => {
+  isDragging.value = true
+}
+
+const handleDragLeave = (event: DragEvent) => {
+  isDragging.value = false
+}
+
+const handleDrop = (event: DragEvent) => {
+  isDragging.value = false
+  const files = event.dataTransfer?.files
+  if (files && files.length > 0) {
+    handleFile(files[0])
   }
-  
-  const handleDragLeave = (event: DragEvent) => {
-    isDragging.value = false
+}
+
+const handleFileSelect = (event: Event) => {
+  const files = (event.target as HTMLInputElement).files
+  if (files && files.length > 0) {
+    handleFile(files[0])
   }
-  
-  const handleDrop = (event: DragEvent) => {
-    isDragging.value = false
-    const files = event.dataTransfer?.files
-    if (files && files.length > 0) {
-      handleFile(files[0])
-    }
+}
+
+const handleFile = (file: File) => {
+  if (file.type === 'application/pdf') {
+    selectedFile.value = file
+    uploadFile()
+  } else {
+    uploadError.value = 'Please select a valid PDF file.'
   }
-  
-  const handleFileSelect = (event: Event) => {
-    const files = (event.target as HTMLInputElement).files
-    if (files && files.length > 0) {
-      handleFile(files[0])
-    }
-  }
-  
-  const handleFile = (file: File) => {
-    if (file.type === 'application/pdf') {
-      selectedFile.value = file
-      uploadFile()
-    } else {
-      uploadError.value = 'Please select a valid PDF file.'
-    }
-  }
-  
-  const uploadFile = async () => {
+}
+
+const uploadFile = async () => {
   if (!selectedFile.value) return
   isUploading.value = true
   uploadSuccess.value = false
@@ -155,8 +159,11 @@ const getContext = async () => {
 }
 
 const updateSelectedContexts = () => {
-  const selectedContexts = contexts.value.filter(context => context.selected)
-  emit('contextsUpdated', selectedContexts)
+  const newSelectedContexts = contexts.value
+    .filter(context => context.selected)
+    .map(({ page, content }) => ({ page, content }))
+  
+  emit('contextsUpdated', newSelectedContexts)
 }
 
 // Watch for changes in contexts and update selected contexts

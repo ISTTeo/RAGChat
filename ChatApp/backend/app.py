@@ -110,13 +110,14 @@ def answer_question():
     question = data['question']
     contexts = data['contexts']
     
+    
     llm = LocalLLM(api_url="http://localhost:5000")
     
     template = """<|system|>
 You are an assistant for question-answering tasks. Use the following pieces of retrieved context to answer the question. If you don't know the answer, just say that you don't know. Use three sentences maximum and keep the answer concise.<|end|>
 <|user|>
 Question: {input}
-Contexts:
+Context:
 {context}<|end|>
 <|assistant|>"""
     prompt = PromptTemplate.from_template(template)
@@ -124,8 +125,10 @@ Contexts:
     # Combine contexts into a single string
     combined_context = "\n".join([ctx['content'] for ctx in contexts])
     
+    formated_prompt = prompt.format(input=question, context=combined_context)
+    print(formated_prompt)
     # Generate answer
-    response = llm(prompt.format(input=question, context=combined_context))
+    response = llm(formated_prompt)
     
     return jsonify({"answer": response}), 200
 
