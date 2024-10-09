@@ -30,7 +30,7 @@ const handleFileUpload = (file: File) => {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color: #2c3e50;
-  height: 100vh;
+  height: 100%;
   margin: 0;
   padding: 0;
 }
@@ -43,19 +43,12 @@ const handleFileUpload = (file: File) => {
 .chat-section, .file-upload-section {
   flex: 1;
   padding: 20px;
-  overflow-y: auto;
 }
 
 .chat-section {
   border-right: 1px solid #ccc;
 }
 
-h1 {
-  margin-top: 0;
-  margin-bottom: 20px;
-  font-size: 24px;
-  text-align: center;
-}
 
 @media (max-width: 768px) {
   .split-layout {

@@ -15,7 +15,64 @@
   </template>
   
   <script setup lang="ts">
-  // ... (script content remains the same) ...
+  import { ref, onMounted, watch } from 'vue'
+  import axios from 'axios'
+  
+  const inputMessage = ref('')
+  const messages = ref([])
+  const isLoading = ref(false)
+  const chatMessages = ref(null)
+  const error = ref('')
+  const uploadedFile = ref<File | null>(null)
+  
+  const props = defineProps<{
+    uploadedFile: File | null
+  }>()
+  
+  watch(() => props.uploadedFile, (newFile) => {
+    if (newFile) {
+      uploadedFile.value = newFile
+      messages.value.push({ type: 'system', text: `File uploaded: ${newFile.name}. You can now ask questions about the content.` })
+    }
+  })
+  
+  const sendMessage = async () => {
+    if (inputMessage.value.trim() === '' || !uploadedFile.value) return
+    
+    const userMessage = { type: 'user', text: inputMessage.value }
+    messages.value.push(userMessage)
+    inputMessage.value = ''
+    isLoading.value = true
+    error.value = ''
+  
+    const formData = new FormData()
+    formData.append('question', userMessage.text)
+    formData.append('file', uploadedFile.value)
+  
+    try {
+      const result = await axios.post('http://localhost:5001/api/process', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+      messages.value.push({ type: 'bot', text: result.data.answer })
+    } catch (err) {
+      console.error('Error:', err)
+      error.value = 'An error occurred while processing your request. Please try again.'
+      messages.value.push({ type: 'system', text: 'Error: Unable to process your request.' })
+    } finally {
+      isLoading.value = false
+    }
+  }
+  
+  const scrollToBottom = () => {
+    if (chatMessages.value) {
+      chatMessages.value.scrollTop = chatMessages.value.scrollHeight
+    }
+  }
+  
+  watch(() => messages.value.length, scrollToBottom)
+  onMounted(scrollToBottom)
   </script>
   
   <style scoped>
