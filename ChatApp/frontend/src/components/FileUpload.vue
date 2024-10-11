@@ -1,6 +1,6 @@
 <template>
   <div class="file-upload">
-    <h2>Upload PDF and Ask Context Question</h2>
+    <h2>Upload PDFs and Ask Context Question</h2>
     <div 
       class="upload-container"
       :class="{ 'dragging': isDragging }"
@@ -14,17 +14,22 @@
         accept=".pdf" 
         id="file-input" 
         class="file-input"
+        multiple
       />
       <label for="file-input" class="file-input-label">
-        <span v-if="!selectedFile">Drag & Drop PDF here or Click to Browse</span>
-        <span v-else>{{ selectedFile.name }}</span>
+        <span>Drag & Drop PDFs here or Click to Browse</span>
       </label>
     </div>
-    <div v-if="isUploading" class="upload-status">Uploading...</div>
+    <div v-if="isUploading" class="upload-status">
+      Uploading... {{ uploadProgress.toFixed(2) }}%
+      <div class="progress-bar">
+        <div class="progress" :style="{ width: `${uploadProgress}%` }"></div>
+      </div>
+    </div>
     <div v-if="uploadSuccess" class="upload-status success">Upload successful!</div>
     <div v-if="uploadError" class="upload-status error">{{ uploadError }}</div>
 
-    <div v-if="uploadSuccess" class="context-question-section">
+    <div v-if="uploadedFiles.length > 0" class="context-question-section">
       <h3>Ask a Context Question</h3>
       <input 
         v-model="contextQuestion" 
@@ -40,7 +45,7 @@
         <div v-for="(context, index) in contexts" :key="index" class="context-item">
           <label>
             <input type="checkbox" v-model="context.selected" @change="updateSelectedContexts" />
-            <strong>Page {{ context.page }}:</strong>
+            <strong>File: {{ context.fileName }} - Page {{ context.page }} ({{ context.token_count }} tokens):</strong>
           </label>
           <p>{{ context.content }}</p>
         </div>
@@ -54,12 +59,12 @@ import { ref, watch } from 'vue'
 import axios from 'axios'
 
 const props = defineProps<{
-  selectedContexts: Array<{ page: string, content: string }>
+  selectedContexts: Array<{ fileName: string, page: string, content: string }>
 }>()
 
-const emit = defineEmits(['fileUploaded', 'contextsUpdated'])
+const emit = defineEmits(['filesUploaded', 'contextsUpdated'])
 
-const selectedFile = ref<File | null>(null)
+const uploadedFiles = ref<File[]>([])
 const isUploading = ref(false)
 const uploadSuccess = ref(false)
 const uploadError = ref('')
@@ -67,7 +72,8 @@ const isDragging = ref(false)
 const contextQuestion = ref('')
 const isLoadingContext = ref(false)
 const contextError = ref('')
-const contexts = ref<Array<{ page: string, content: string, selected: boolean }>>([])
+const contexts = ref<Array<{ fileName: string, page: string, content: string, token_count: number, selected: boolean }>>([])
+const uploadProgress = ref(0)
 
 const handleDragOver = (event: DragEvent) => {
   isDragging.value = true
@@ -80,48 +86,78 @@ const handleDragLeave = (event: DragEvent) => {
 const handleDrop = (event: DragEvent) => {
   isDragging.value = false
   const files = event.dataTransfer?.files
-  if (files && files.length > 0) {
-    handleFile(files[0])
+  if (files) {
+    handleFiles(Array.from(files))
   }
 }
 
 const handleFileSelect = (event: Event) => {
   const files = (event.target as HTMLInputElement).files
-  if (files && files.length > 0) {
-    handleFile(files[0])
+  if (files) {
+    handleFiles(Array.from(files))
   }
 }
 
-const handleFile = (file: File) => {
-  if (file.type === 'application/pdf') {
-    selectedFile.value = file
-    uploadFile()
+const handleFiles = (files: File[]) => {
+  const pdfFiles = files.filter(file => file.type === 'application/pdf')
+  if (pdfFiles.length > 0) {
+    uploadedFiles.value.push(...pdfFiles)
+    uploadFiles()
   } else {
-    uploadError.value = 'Please select a valid PDF file.'
+    uploadError.value = 'Please select valid PDF files.'
   }
 }
 
-const uploadFile = async () => {
-  if (!selectedFile.value) return
+const removeFile = (index: number) => {
+  uploadedFiles.value.splice(index, 1)
+  emit('filesUploaded', uploadedFiles.value)
+}
+
+const uploadFiles = async () => {
+  if (uploadedFiles.value.length === 0) return
   isUploading.value = true
   uploadSuccess.value = false
   uploadError.value = ''
+  uploadProgress.value = 0
 
   try {
     const formData = new FormData()
-    formData.append('file', selectedFile.value)
-
-    const response = await axios.post('http://localhost:5001/api/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
+    uploadedFiles.value.forEach((file, index) => {
+      formData.append(`file${index}`, file)
     })
 
-    if (response.status === 200) {
-      uploadSuccess.value = true
-      emit('fileUploaded', selectedFile.value)
+    const response = await fetch('http://localhost:5001/api/upload', {
+      method: 'POST',
+      body: formData,
+    })
+
+    const reader = response.body?.getReader()
+    const decoder = new TextDecoder()
+
+    if (reader) {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value)
+        const lines = chunk.split('\n')
+
+        for (const line of lines) {
+          if (line.trim()) {
+            const data = JSON.parse(line)
+            if (data.status === 'processing') {
+              uploadProgress.value = data.progress
+            } else if (data.status === 'complete') {
+              uploadSuccess.value = true
+              emit('filesUploaded', uploadedFiles.value)
+            } else if (data.error) {
+              throw new Error(data.error)
+            }
+          }
+        }
+      }
     } else {
-      throw new Error('Upload failed')
+      throw new Error('Failed to get response reader')
     }
   } catch (error) {
     console.error('Upload error:', error)
@@ -139,13 +175,15 @@ const getContext = async () => {
 
   try {
     const response = await axios.post('http://localhost:5001/api/query', {
-      question: contextQuestion.value
+      question: contextQuestion.value,
+      files: uploadedFiles.value.map(file => file.name)
     })
 
     if (response.status === 200) {
       contexts.value = response.data.contexts.map((ctx: any) => ({
         ...ctx,
-        selected: false
+        selected: false,
+        token_count: ctx.token_count || 0 // Ensure token_count is included
       }))
     } else {
       throw new Error('Failed to get context')
@@ -161,7 +199,7 @@ const getContext = async () => {
 const updateSelectedContexts = () => {
   const newSelectedContexts = contexts.value
     .filter(context => context.selected)
-    .map(({ page, content }) => ({ page, content }))
+    .map(({ fileName, page, content, token_count }) => ({ fileName, page, content, token_count }))
   
   emit('contextsUpdated', newSelectedContexts)
 }
@@ -241,4 +279,43 @@ watch(contexts, updateSelectedContexts, { deep: true })
 .error {
   color: red;
 }
+
+.uploaded-files-list {
+  margin-top: 20px;
+}
+
+.uploaded-files-list ul {
+  list-style-type: none;
+  padding: 0;
+}
+
+.uploaded-files-list li {
+  margin-bottom: 5px;
+}
+
+.remove-file-btn {
+  margin-left: 10px;
+  padding: 2px 5px;
+  background-color: #ff4444;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 20px;
+  background-color: #e0e0e0;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-top: 10px;
+}
+
+.progress {
+  height: 100%;
+  background-color: #4CAF50;
+  transition: width 0.3s ease;
+}
+
 </style>

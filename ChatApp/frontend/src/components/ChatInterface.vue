@@ -8,7 +8,7 @@
       </div>
       <div class="chat-input">
         <input v-model="inputMessage" @keyup.enter="sendMessage" placeholder="Type your question..." />
-        <button @click="sendMessage" :disabled="isLoading || !uploadedFile">
+        <button @click="sendMessage" :disabled="isLoading">
           {{ sendButtonText }}
         </button>
       </div>
@@ -21,12 +21,13 @@
         {{ isDrawerOpen ? '>' : '<' }}
       </button>
       <h3>Selected Contexts</h3>
+      <p>Total Tokens: {{ totalTokenCount }}</p>
       <div v-if="selectedContexts.length === 0" class="no-contexts">
         No contexts selected
       </div>
       <div v-else class="context-list">
         <div v-for="(context, index) in selectedContexts" :key="index" class="context-item">
-          <p><strong>Page {{ context.page }}:</strong></p>
+          <p><strong>Page {{ context.page }} ({{ context.token_count }} tokens):</strong></p>
           <p>{{ context.content }}</p>
           <button @click="removeContext(index)" class="remove-context">Remove</button>
         </div>
@@ -41,7 +42,7 @@ import axios from 'axios'
 
 const props = defineProps<{
   uploadedFile: File | null,
-  selectedContexts: Array<{ page: string, content: string }>
+  selectedContexts: Array<{ page: string, content: string, token_count: number }>
 }>()
 
 const emit = defineEmits(['removeContext'])
@@ -58,7 +59,7 @@ const sendButtonText = computed(() => {
 })
 
 const sendMessage = async () => {
-  if (inputMessage.value.trim() === '' || !props.uploadedFile) return
+  if (inputMessage.value.trim() === '') return
   
   const userMessage = { type: 'user', text: inputMessage.value }
   messages.value.push(userMessage)
@@ -89,6 +90,10 @@ const scrollToBottom = () => {
     chatMessages.value.scrollTop = chatMessages.value.scrollHeight
   }
 }
+
+const totalTokenCount = computed(() => {
+  return props.selectedContexts.reduce((total, context) => total + context.token_count, 0);
+});
 
 const removeContext = (index: number) => {
   emit('removeContext', index)
