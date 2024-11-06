@@ -1,0 +1,3 @@
+    python rag.py 
+        --question "What is Task Decomposition?" 
+        --gpu 2
